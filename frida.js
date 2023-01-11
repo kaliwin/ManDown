@@ -1,3 +1,26 @@
+
+
+//程序入口
+setImmediate(function () {
+    Java.perform(function () {
+
+        // hookAllNew("me.czhd.venus")  hook该包下的所有函数
+
+
+        console.log("success")
+
+    })
+
+})
+
+
+
+
+
+
+
+
+
 // Frida Java hooking helper class.
 //
 // Edit the example below the HookManager class to suit your
@@ -153,18 +176,7 @@ class JavaHookManager {
 //   return ret;
 // }
 
-//程序入口
-setImmediate(function () {
-    Java.perform(function () {
 
-        // hookAllNew("me.czhd.venus")  hook该包下的所有函数
-
-
-        console.log("success")
-
-    })
-
-})
 
 
 function hookAllTest(classNameS) {
