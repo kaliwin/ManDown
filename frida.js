@@ -153,46 +153,11 @@ class JavaHookManager {
 //   return ret;
 // }
 
-
+//程序入口
 setImmediate(function () {
     Java.perform(function () {
 
-        // hookAllNew("me.czhd.venus")
-
-        //   ---- hook关键函数 ----
-        // Java.use("me.czhd.venus.base.util.LIlLi")["丨丨1"].implementation = function (a, b, c) {
-        //     let res = this["丨丨1"](a, b, c)
-        //     let keySet = a.keySet();
-        //     let iterator = keySet.iterator();
-        //     while (iterator.hasNext()) {   //迭代Map
-        //         var key = iterator.next();
-        //         console.log("ket: " + key + " value: " + a.get(key))
-        //     }
-        //     for (let i = 0; i < b.size(); i++) { //迭代List
-        //         console.log("List value ==> " + b.get(i))
-        //     }
-        //     console.log("c "+c)
-        //     console.log("res ==> "+res)
-        //     return res;
-        //
-        // }
-
-
-        // ---- 主动调用 ----
-        // let HashMap = Java.use('java.util.HashMap').$new();
-        // HashMap.put("areaCode", "86")
-        // HashMap.put("appKey", "we_sign_2.0")
-        // HashMap.put("method", "system.phoneCode")
-        // HashMap.put("v", "12.19")
-        // HashMap.put("fm", "json")
-        // HashMap.put("sessionid", "")
-        // HashMap.put("type", "phone_login")
-        //  HashMap.put("phone", "18807787294")
-        // let ArrayList = Java.use("java.util.ArrayList").$new();
-        // ArrayList.add("sessionid")
-        // ArrayList.add("sign")
-        // let ret = Java.use("me.czhd.venus.base.util.LIlLi")["丨丨1"](HashMap,ArrayList,"")
-        // console.log("ret ==> "+ret)
+        // hookAllNew("me.czhd.venus")  hook该包下的所有函数
 
 
         console.log("success")
@@ -260,7 +225,7 @@ function hookAllNew(classNameS) {
         //     break
         // }
         //&& className.indexOf("me.czhd.venus.base.util.l丨liiI1").pro ==-1
-        if (className.indexOf(classNameS) != -1&& className.indexOf("me.czhd.venus.base.util.l丨liiI1") ==-1) {
+        if (className.indexOf(classNameS) != -1) {
 
             const classA = Java.use(className)
             for (const Methods of classA.class.getDeclaredMethods()) {
@@ -277,7 +242,7 @@ function hookAllNew(classNameS) {
                             name = name + "(" + rec[rec.length - 1]
                             let MethodName = tmp[tmp.length - 2] + " " + name   //通过反射获取函数签名在进行分割处理用于打印
 
-                            console.log(" 被调用的函数信息: " + className + " ==> " + MethodName+" url=> "+encodeURIComponent(Method.getName()))
+                            console.log(" 被调用的函数信息: " + className + " ==> " + MethodName+" url=> "+encodeURIComponent(Method.getName())) //将函数名进行url编码避免有混淆特殊字符
                             console.log("当前对象 " + this)  //打印当前实例信息用于区分实例
 
                             for (let i of arguments) {
