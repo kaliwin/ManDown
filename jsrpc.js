@@ -5,33 +5,39 @@
             function S4() {
                 return (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
             }
+
             return (S4() + S4() + "-" + S4() + "-" + S4() + "-" + S4() + "-" + S4() + S4() + S4());
         }
-        //创建webSocket 连接
+
+     //创建webSocket 连接
         
         var client = new SekiroClientTest("ws://127.0.0.1:5612/business-demo/register?group=test&clientId=" + guid());
         //注册一个行动监听
         client.registerAction("encrypt", function (request, resolve, reject) {
             try {
-        
                 var data = request['data']
-             //   var cyvk = window._cyvk(user);
-                resolve(window._d(data))
+                resolve(window._e(data))
             } catch (e) {
                 reject("error: " + e);
             }
         });
         client.registerAction("Decrypt", function (request, resolve, reject) {
             try {
-        
                 var data = request['data']
-             //   var cyvk = window._cyvk(user);
                 resolve(window._d(data))
             } catch (e) {
                 reject("error: " + e);
             }
         });
-
+        
+          client.registerAction("test", function (request, resolve, reject) {
+            try {
+                console.log(request)
+                reject("200 0k");
+            } catch (e) {
+                reject("error: " + e);
+            }
+        });
     }
 
     console.log("超时连接")
@@ -101,4 +107,51 @@
             console.log("sekiro: disconnected ,reconnection after 2s"), setTimeout(function () {
                 e.connect()
             }, 2e3)
-        })​
+        })
+    }, SekiroClientTest.prototype.handleSekiroRequest = function (e) {
+        console.log("receive sekiro request: " + e);
+        var o = JSON.parse(e), t = o.__sekiro_seq__;
+        if (o.action) {
+            var n = o.action;
+            if (this.handlers[n]) {
+                var s = this.handlers[n], i = this;
+                try {
+                    s(o, function (e) {
+                        try {
+                            i.sendSuccess(t, e)
+                        } catch (e) {
+                            i.sendFailed(t, "e:" + e)
+                        }
+                    }, function (e) {
+                        i.sendFailed(t, e)
+                    })
+                } catch (e) {
+                    console.log("error: " + e), i.sendFailed(t, ":" + e)
+                }
+            } else this.sendFailed(t, "no action handler: " + n + " defined")
+        } else this.sendFailed(t, "need request param {action}")
+    }, SekiroClientTest.prototype.sendSuccess = function (e, o) {
+        var t;
+        if ("string" == typeof o) try {
+            t = JSON.parse(o)
+        } catch (e) {
+            (t = {}).data = o
+        } else "object" == typeof o ? t = o : (t = {}).data = o;
+        (Array.isArray(t) || "string" == typeof t) && (t = {
+            data: t,
+            code: 0
+        }), t.code ? t.code = 0 : (t.status, t.status = 0), t.__sekiro_seq__ = e;
+        var n = JSON.stringify(t);
+        console.log("response :" + n), this.socket.send(n)
+    }, SekiroClientTest.prototype.sendFailed = function (e, o) {
+        "string" != typeof o && (o = JSON.stringify(o));
+        var t = {};
+        t.message = o, t.status = -1, t.__sekiro_seq__ = e;
+        var n = JSON.stringify(t);
+        console.log("sekiro: response :" + n), this.socket.send(n)
+    }, SekiroClientTest.prototype.registerAction = function (e, o) {
+        if ("string" != typeof e) throw new Error("an action must be string");
+        if ("function" != typeof o) throw new Error("a handler must be function");
+        return console.log("sekiro: register action: " + e), this.handlers[e] = o, this
+    };
+})();
