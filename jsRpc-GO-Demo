@@ -1,0 +1,185 @@
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/kaliwin/MorePossibility-GO/BurpApi"
+	"google.golang.org/grpc"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"strings"
+)
+
+// SekiroData Sekiro返回的数据结构
+type SekiroData struct {
+	ClientId string `json:"clientId"`
+	Data     string `json:"data"`
+	Status   int    `json:"status"`
+}
+
+// JsRpcDemo jsRpc演示
+type JsRpcDemo struct {
+	BurpApi.UnimplementedIntruderPayloadProcessorServerServer // 迭代处理器
+	BurpApi.UnimplementedHttpFlowHandlerServer                // 流量处理
+	BurpApi.UnimplementedHttpReqEditBoxAssistServer           // 请求编辑框
+}
+
+// ReqHttpEdit 请求编辑框渲染
+func (JsRpcDemo) ReqHttpEdit(c context.Context, h *BurpApi.HttpEditBoxData) (*BurpApi.ByteData, error) {
+
+	req := h.GetHttpReqAndResData().GetReq()
+	data := req.GetData()
+	body := string(data[req.GetBodyIndex():]) // 请求体
+
+	password := "password="
+	endPassword := "&remember"
+
+	index := strings.Index(body, password)
+	end := strings.Index(body, endPassword)
+
+	payload := body[index+len(password) : end] // 密文
+
+	fmt.Println("密文: " + payload)
+
+	// 通过http去调用js函数  如果数据过大可以用POST
+	resp, err := http.Get("http://127.0.0.1:5612/business-demo/invoke?group=test&action=Decrypt&data=" + payload)
+	if err != nil {
+		return nil, err
+	}
+	byteS, _ := io.ReadAll(resp.Body)
+	var sekiroData SekiroData
+	err = json.Unmarshal(byteS, &sekiroData)
+
+	newBody := strings.Replace(body, payload, sekiroData.Data, 1)
+
+	i := append(data[:req.GetBodyIndex()], []byte(newBody)...)
+
+	return &BurpApi.ByteData{ByteData: i}, nil
+}
+
+// IsReqHttpEditFor 是否要渲染
+func (JsRpcDemo) IsReqHttpEditFor(c context.Context, h *BurpApi.HttpEditBoxData) (*BurpApi.Boole, error) {
+
+	if len(h.GetHttpReqAndResData().GetReq().GetData()) == 0 {
+		return &BurpApi.Boole{Boole: false}, nil
+	}
+
+	method := string(h.GetHttpReqAndResData().GetReq().GetData()[:5])
+
+	// 如果你不能判断是否要渲染就直接返回true 因为IsResHttpEditFor这个函数会被调用很多次但是ResHttpEdit只有在你点击的时候才会被调用
+	if strings.Contains(h.GetHttpReqAndResData().GetReq().GetUrl(), "login") && strings.Index(method, "POST") != -1 {
+		return &BurpApi.Boole{Boole: true}, nil
+	}
+
+	return &BurpApi.Boole{Boole: false}, nil
+}
+
+// IntruderPayloadProcessor 迭代处理器
+func (JsRpcDemo) IntruderPayloadProcessor(c context.Context, payload *BurpApi.PayloadProcessorData) (*BurpApi.ByteData, error) {
+
+	// 通过http去调用js函数  如果数据过大可以用POST
+	resp, err := http.Get("http://127.0.0.1:5612/business-demo/invoke?group=test&action=encrypt&data=" + string(payload.GetPayload()))
+	if err != nil {
+		return nil, err
+	}
+	byteS, _ := io.ReadAll(resp.Body)
+	var sekiroData SekiroData
+
+	err = json.Unmarshal(byteS, &sekiroData)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	// 返回js加密后的结果
+	return &BurpApi.ByteData{ByteData: []byte(sekiroData.Data)}, err
+}
+
+// HttpHandleRequestReceived 请求流量处理
+func (JsRpcDemo) HttpHandleRequestReceived(c context.Context, req *BurpApi.HttpFlowReqData) (*BurpApi.HttpRequestAction, error) {
+
+	if BurpApi.HttpFlowSource_REPEATER == req.GetHttpFlowSource() { // 判断流量来源 只处理重放器流量
+		reqData := req.GetHttpReqGroup().GetHttpReqData()
+		httpData := reqData.GetData()        // 完整请求报文
+		body := httpData[reqData.BodyIndex:] // 切割请求体
+
+		str := string(body)
+
+		indexStr := "encrypt{"
+		endStr := "}end"
+
+		index := strings.Index(str, indexStr) // 要加密的开始下标
+		end := strings.Index(str, endStr)     // 要加密的结束下标
+
+		if index == -1 { // 没有要加密的数据 直接退出
+			return &BurpApi.HttpRequestAction{Continue: true}, nil
+		}
+
+		text := str[index+len(indexStr) : end] // 需要解密的内容
+
+		fmt.Println("原文: " + text)
+
+		// 通过http去调用js函数  如果数据过大可以用POST
+		resp, err := http.Get("http://127.0.0.1:5612/business-demo/invoke?group=test&action=encrypt&data=" + text)
+		if err != nil {
+			return nil, err
+		}
+		byteS, _ := io.ReadAll(resp.Body)
+		var sekiroData SekiroData
+
+		err = json.Unmarshal(byteS, &sekiroData)                                          // 解析jsRpc结果
+		replace := []byte(strings.Replace(str, indexStr+text+endStr, sekiroData.Data, 1)) // 替换请求体
+
+		// 将字节流读回请求对象这样方便处理Content-Length 你直接将字节流转为String在修改也是一样
+		request, _ := http.ReadRequest(bufio.NewReader(bytes.NewReader(httpData)))
+		request.ContentLength = int64(len(replace))           // 计算长度
+		request.Body = io.NopCloser(bytes.NewReader(replace)) // 重写请求体
+
+		var by bytes.Buffer
+		_ = request.Write(&by) // 将请求体读回字节流
+
+		// 获取原先请求组  注意这个一个指针引用  GetHttpReqGroup()这个函数返回的不是指针 但是如果你直接使用HttpReqGroup 可能会有空指针 自行判断
+		reqGroup := req.HttpReqGroup
+		reqGroup.HttpReqData.Data = by.Bytes() // 修改请求报文
+
+		reqGroup.AnnotationsText.IsInfo = true
+		reqGroup.AnnotationsText.Notes = "重放器自动加密测试"
+		reqGroup.AnnotationsText.Color = BurpApi.HighlightColor_BLUE // 蓝色高亮
+		return &BurpApi.HttpRequestAction{
+			Continue:     false,
+			IsReviseReq:  true, // 修改请求
+			HttpReqGroup: reqGroup,
+		}, err
+	}
+
+	return &BurpApi.HttpRequestAction{Continue: true}, nil
+}
+
+// HttpHandleResponseReceived 响应流量处理 不做处理返回继续  即便你不用也要实现这个函数放这
+func (JsRpcDemo) HttpHandleResponseReceived(c context.Context, reqAndRes *BurpApi.HttpFlowResData) (*BurpApi.HttpResponseAction, error) {
+	return &BurpApi.HttpResponseAction{Continue: true}, nil
+}
+
+func main() {
+	listen, err := net.Listen("tcp", ":9000")
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	server := grpc.NewServer()
+	BurpApi.RegisterIntruderPayloadProcessorServerServer(server, JsRpcDemo{})
+	BurpApi.RegisterHttpFlowHandlerServer(server, JsRpcDemo{})
+
+	BurpApi.RegisterHttpReqEditBoxAssistServer(server, JsRpcDemo{})
+
+	fmt.Println("[+] Grpc 服务启动")
+	err = server.Serve(listen)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+}
