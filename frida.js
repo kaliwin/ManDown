@@ -1,24 +1,15 @@
-
-
 //程序入口
 setImmediate(function () {
     Java.perform(function () {
 
-        // hookAllNew("me.czhd.venus")  hook该包下的所有函数
 
+        hookAllNew("")  //hook该包下的所有函数
 
-        console.log("success")
+        console.log("success ok")
 
     })
 
 })
-
-
-
-
-
-
-
 
 
 // Frida Java hooking helper class.
@@ -87,7 +78,6 @@ class JavaHookManager {
 
         this.printVerbose(`Have ${this.available_methods.length} methods...`);
     }
-
     validMethod(method) {
         if (!this.available_methods.includes(method)) {
             return false;
@@ -177,8 +167,6 @@ class JavaHookManager {
 // }
 
 
-
-
 function hookAllTest(classNameS) {
     for (const className of Java.enumerateLoadedClassesSync()) {
         //me.czhd.venus.module.common.ui.SplashCodeActivity
@@ -187,8 +175,8 @@ function hookAllTest(classNameS) {
         // if (className.indexOf("android") != -1){
         //     break
         // }
-
-        if (className.indexOf(classNameS) != -1 && className.indexOf("me.czhd.venus.base.util.l丨liiI1") ==-1) {
+//&& className.indexOf("me.czhd.venus.base.util.l丨liiI1") ==-1)
+        if (className.indexOf(classNameS) != -1) {
 
             const classA = Java.use(className)
             for (const Methods of classA.class.getDeclaredMethods()) {
@@ -236,7 +224,6 @@ function hookAllNew(classNameS) {
         // if (className.indexOf("android") != -1){
         //     break
         // }
-        //&& className.indexOf("me.czhd.venus.base.util.l丨liiI1").pro ==-1
         if (className.indexOf(classNameS) != -1) {
 
             const classA = Java.use(className)
@@ -244,7 +231,7 @@ function hookAllNew(classNameS) {
                 const Method = Methods
                 // const methodName = encodeURIComponent(Methods.getName())      //对方法名进行一次url编码避免名字存在特殊字符
                 // let vvc = classA[decodeURIComponent(methodName)].overloads    //拿到该函数的所有方法重载
-                 let vvc = classA[Methods.getName()].overloads   //拿到该函数的所有方法重载
+                let vvc = classA[Methods.getName()].overloads   //拿到该函数的所有方法重载
                 for (let ii of vvc) {     //遍历hook所有重载函数
                     ii.implementation = function () {
                         let ret = ii.apply(this, arguments);  // 执行原本逻辑
@@ -254,7 +241,7 @@ function hookAllNew(classNameS) {
                             name = name + "(" + rec[rec.length - 1]
                             let MethodName = tmp[tmp.length - 2] + " " + name   //通过反射获取函数签名在进行分割处理用于打印
 
-                            console.log(" 被调用的函数信息: " + className + " ==> " + MethodName+" url=> "+encodeURIComponent(Method.getName())) //将函数名进行url编码避免有混淆特殊字符
+                            console.log(" 被调用的函数信息: " + className + " ==> " + MethodName + " url=> " + encodeURIComponent(Method.getName())) //将函数名进行url编码避免有混淆特殊字符
                             console.log("当前对象 " + this)  //打印当前实例信息用于区分实例
 
                             for (let i of arguments) {
@@ -262,21 +249,21 @@ function hookAllNew(classNameS) {
                             }
                             console.log("r ==> " + ret)       //返回值
 
-                            console.log("对象属性: ")
-                            const fields = classA.class.getDeclaredFields()
-                            for (let i of fields) {         //通过反射打印当前对象的所有属性
-                                let field = classA.class.getDeclaredField(i.getName())
-                                field.setAccessible(true)
-                                let object = field.get(this)
-                                console.log("\t" + i.getName() + " ==> " + object)
-                            }
+                            // console.log("对象属性: ")
+                            // const fields = classA.class.getDeclaredFields()
+                            // for (let i of fields) {         //通过反射打印当前对象的所有属性
+                            //     let field = classA.class.getDeclaredField(i.getName())
+                            //     field.setAccessible(true)
+                            //     let object = field.get(this)
+                            //     console.log("\t" + i.getName() + " ==> " + object)
+                            // }
                         } catch (e) {
                             console.log("无实例！！！！")
-                            printStack()     //打印堆栈
+                            // printStack()     //打印堆栈
                             return ret
                         }
-                        printStack()
-                        console.log("success !!!!!")
+                        // printStack()
+                        console.log("============================= ========================================")
                         return ret
                     }
                 }
